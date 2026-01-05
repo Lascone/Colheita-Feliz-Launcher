@@ -1,5 +1,8 @@
-const { app, BrowserWindow, globalShortcut, Menu, ipcMain } = require('electron');
+const { app, BrowserWindow, globalShortcut, Menu, ipcMain, dialog } = require('electron');
 const path = require('path');
+const https = require('https');
+const fs = require('fs');
+const { execFile } = require('child_process');
 
 // 1. DESATIVA TOTALMENTE A GPU E ACELERAÇÃO
 app.disableHardwareAcceleration();
@@ -21,6 +24,35 @@ app.commandLine.appendSwitch('ignore-certificate-errors');
 app.commandLine.appendSwitch('ignore-urlfetcher-cert-requests');
 
 let mainWindow;
+const VERSION = '1.0.0';
+const REPO_API = 'https://api.github.com/repos/Lascone/Colheita-Feliz-Launcher/releases/latest';
+
+// ========== VERIFICAR ATUALIZAÇÕES ==========
+function verificarAtualizacoes() {
+  https.get(REPO_API, {
+    headers: { 'User-Agent': 'Colheita-Feliz-Launcher' }
+  }, (res) => {
+    let data = '';
+    res.on('data', chunk => data += chunk);
+    res.on('end', () => {
+      try {
+        const release = JSON.parse(data);
+        const novaVersao = release.tag_name.replace('v', '');
+        
+        if (novaVersao > VERSION) {
+          mainWindow.webContents.send('nova-atualizacao-disponivel', {
+            versao: novaVersao,
+            download: release.html_url
+          });
+        }
+      } catch (e) {
+        console.log('Erro ao verificar atualizações:', e.message);
+      }
+    });
+  }).on('error', (e) => {
+    console.log('Erro na conexão:', e.message);
+  });
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -42,6 +74,9 @@ function createWindow() {
 
   mainWindow.maximize();
   mainWindow.webContents.session.clearStorageData();
+
+  // Verifica atualizações após 2 segundos
+  setTimeout(verificarAtualizacoes, 2000);
 
   const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/49.0.2623.75 Safari/537.36";
   
@@ -66,6 +101,18 @@ function createWindow() {
       body {
         margin: 0 !important;
         padding: 0 !important;
+        transition: background-color 0.3s ease;
+      }
+      
+      /* TEMA ESCURO */
+      body.dark-theme {
+        filter: invert(1) hue-rotate(180deg);
+      }
+      
+      body.dark-theme .launcher-menu-dropdown,
+      body.dark-theme .help-content,
+      body.dark-theme .confirm-content {
+        filter: invert(1) hue-rotate(180deg);
       }
       
       /* BARRA DE TÍTULO - REMOVIDA */
@@ -211,6 +258,56 @@ function createWindow() {
         box-shadow: 0 6px 16px rgba(255, 20, 147, 0.6);
       }
       
+      /* BOTÃO DE TEMA ESCURO */
+      .launcher-theme-btn {
+        position: fixed;
+        top: 37px;
+        right: 140px;
+        width: 50px;
+        height: 50px;
+        background: linear-gradient(135deg, #4B0082 0%, #9370DB 100%);
+        border: 3px solid #2F004F;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        z-index: 999998;
+        box-shadow: 0 4px 12px rgba(75, 0, 130, 0.4);
+        transition: all 0.3s;
+      }
+      
+      .launcher-theme-btn:hover {
+        transform: scale(1.1);
+        box-shadow: 0 6px 16px rgba(75, 0, 130, 0.6);
+      }
+      
+      /* BOTÃO DE PERFIS/CONTAS */
+      .launcher-profiles-btn {
+        position: fixed;
+        top: 37px;
+        right: 210px;
+        width: 50px;
+        height: 50px;
+        background: linear-gradient(135deg, #FF6B9D 0%, #C44569 100%);
+        border: 3px solid #A23860;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        z-index: 999998;
+        box-shadow: 0 4px 12px rgba(200, 50, 100, 0.4);
+        transition: all 0.3s;
+      }
+      
+      .launcher-profiles-btn:hover {
+        transform: scale(1.1);
+        box-shadow: 0 6px 16px rgba(200, 50, 100, 0.6);
+      }
+      
       /* MODAL DE AJUDA */
       .launcher-help-modal {
         position: fixed;
@@ -338,6 +435,192 @@ function createWindow() {
         visibility: visible;
       }
       
+      /* MENU DE PERFIS */
+      .launcher-profiles-dropdown {
+        position: fixed;
+        top: 100px;
+        right: 15px;
+        width: 220px;
+        background: linear-gradient(135deg, #FFFACD 0%, #FFE4B5 100%);
+        border: 3px solid #8B4513;
+        border-radius: 15px;
+        z-index: 999997;
+        box-shadow: 0 6px 20px rgba(139, 69, 19, 0.4);
+        padding: 10px;
+        opacity: 0;
+        visibility: hidden;
+        transform: scale(0.8);
+        transform-origin: top right;
+        transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        max-height: 300px;
+        overflow-y: auto;
+      }
+      
+      .launcher-profiles-dropdown.active {
+        opacity: 1;
+        visibility: visible;
+        transform: scale(1);
+      }
+      
+      .profile-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 15px;
+        margin: 5px 0;
+        background: linear-gradient(135deg, #FFE4B5 0%, #FFDAB9 100%);
+        border: 2px solid #8B4513;
+        border-radius: 10px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: bold;
+        color: #333;
+        transition: all 0.2s;
+        font-family: 'Comic Sans MS', cursive;
+      }
+      
+      .profile-item:hover {
+        transform: translateX(-5px) scale(1.02);
+        background: linear-gradient(135deg, #FFDAB9 0%, #FFD4A3 100%);
+        box-shadow: 0 3px 10px rgba(139, 69, 19, 0.3);
+      }
+      
+      .profile-item.active {
+        background: linear-gradient(135deg, #90EE90 0%, #7CFC00 100%);
+        border: 2px solid #228B22;
+      }
+      
+      .profile-avatar {
+        font-size: 24px;
+        min-width: 30px;
+        text-align: center;
+      }
+      
+      .profile-info {
+        flex: 1;
+        text-align: left;
+      }
+      
+      .profile-name {
+        font-weight: bold;
+        font-size: 13px;
+      }
+      
+      .profile-email {
+        font-size: 11px;
+        color: #666;
+        opacity: 0.8;
+      }
+      
+      .add-profile-btn {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 15px;
+        margin: 10px 0 0 0;
+        background: linear-gradient(135deg, #90EE90 0%, #7CFC00 100%);
+        border: 2px solid #228B22;
+        border-radius: 10px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: bold;
+        color: #228B22;
+        transition: all 0.2s;
+        font-family: 'Comic Sans MS', cursive;
+      }
+      
+      .add-profile-btn:hover {
+        transform: scale(1.05);
+        box-shadow: 0 3px 10px rgba(34, 139, 34, 0.3);
+      }
+      
+      /* MODAL DE ATUALIZAÇÃO */
+      .launcher-update-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 999996;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s;
+      }
+      
+      .launcher-update-modal.active {
+        opacity: 1;
+        visibility: visible;
+      }
+      
+      .update-content {
+        background: linear-gradient(135deg, #FFFACD 0%, #FFE4B5 100%);
+        border: 4px solid #FF8C00;
+        border-radius: 20px;
+        padding: 30px;
+        max-width: 450px;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+        font-family: 'Comic Sans MS', cursive;
+        text-align: center;
+      }
+      
+      .update-header {
+        font-size: 28px;
+        font-weight: bold;
+        color: #FF8C00;
+        margin-bottom: 15px;
+      }
+      
+      .update-text {
+        color: #333;
+        font-size: 16px;
+        margin-bottom: 20px;
+        line-height: 1.6;
+      }
+      
+      .update-buttons {
+        display: flex;
+        gap: 15px;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+      
+      .update-btn {
+        padding: 12px 25px;
+        border: none;
+        border-radius: 10px;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-family: 'Comic Sans MS', cursive;
+      }
+      
+      .update-btn-now {
+        background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+        color: #333;
+        border: 2px solid #FF8C00;
+      }
+      
+      .update-btn-now:hover {
+        transform: scale(1.05);
+        box-shadow: 0 4px 12px rgba(255, 140, 0, 0.4);
+      }
+      
+      .update-btn-later {
+        background: linear-gradient(135deg, #87CEEB 0%, #4682B4 100%);
+        color: white;
+        border: 2px solid #36648B;
+      }
+      
+      .update-btn-later:hover {
+        transform: scale(1.05);
+        box-shadow: 0 4px 12px rgba(70, 130, 180, 0.4);
+      }
+      
       .confirm-content {
         background: linear-gradient(135deg, #FFFACD 0%, #FFE4B5 100%);
         border: 4px solid #FF8C00;
@@ -459,6 +742,83 @@ function createWindow() {
       // VARIÁVEIS GLOBAIS
       let menuOpen = false;
       let helpOpen = false;
+      let profilesOpen = false;
+      let perfilAtual = localStorage.getItem('launcher-perfil-atual') || 'Principal';
+      let temaEscuro = localStorage.getItem('launcher-tema-escuro') === 'true';
+
+      // APLICA TEMA SALVO
+      if (temaEscuro) {
+        document.body.classList.add('dark-theme');
+      }
+
+      // CRIA BOTÃO DE TEMA ESCURO
+      const themeBtn = document.createElement('div');
+      themeBtn.className = 'launcher-theme-btn';
+      themeBtn.innerHTML = temaEscuro ? '☀️' : '🌙';
+      themeBtn.title = 'Alternar Tema';
+      themeBtn.onclick = () => {
+        temaEscuro = !temaEscuro;
+        localStorage.setItem('launcher-tema-escuro', temaEscuro);
+        document.body.classList.toggle('dark-theme');
+        themeBtn.innerHTML = temaEscuro ? '☀️' : '🌙';
+      };
+      document.body.appendChild(themeBtn);
+
+      // CRIA BOTÃO DE PERFIS
+      const profilesBtn = document.createElement('div');
+      profilesBtn.className = 'launcher-profiles-btn';
+      profilesBtn.innerHTML = '👤';
+      profilesBtn.title = 'Contas';
+      profilesBtn.onclick = () => {
+        profilesOpen = !profilesOpen;
+        profilesBtn.classList.toggle('active');
+        profilesDropdown.classList.toggle('active');
+      };
+      document.body.appendChild(profilesBtn);
+
+      // CRIA MENU DE PERFIS
+      const profilesDropdown = document.createElement('div');
+      profilesDropdown.className = 'launcher-profiles-dropdown';
+      
+      function atualizarListaPerfis() {
+        const perfis = JSON.parse(localStorage.getItem('launcher-perfis') || '[]');
+        profilesDropdown.innerHTML = '';
+        
+        perfis.forEach((perfil, idx) => {
+          const item = document.createElement('div');
+          item.className = 'profile-item';
+          if (perfil.nome === perfilAtual) item.classList.add('active');
+          
+          item.innerHTML = \`
+            <div class="profile-avatar">\${perfil.emoji}</div>
+            <div class="profile-info">
+              <div class="profile-name">\${perfil.nome}</div>
+              <div class="profile-email">\${perfil.email || 'sem email'}</div>
+            </div>
+          \`;
+          
+          item.onclick = () => {
+            perfilAtual = perfil.nome;
+            localStorage.setItem('launcher-perfil-atual', perfilAtual);
+            carregarCredenciaisDoPerfil();
+            atualizarListaPerfis();
+            profilesBtn.classList.remove('active');
+            profilesOpen = false;
+            profilesDropdown.classList.remove('active');
+          };
+          
+          profilesDropdown.appendChild(item);
+        });
+        
+        const addBtn = document.createElement('div');
+        addBtn.className = 'add-profile-btn';
+        addBtn.innerHTML = '➕ Novo Perfil';
+        addBtn.onclick = () => criarNovoPerfil();
+        profilesDropdown.appendChild(addBtn);
+      }
+      
+      atualizarListaPerfis();
+      document.body.appendChild(profilesDropdown);
 
       // CRIA BOTÃO DE MENU (EXPANSÍVEL)
       const menuBtn = document.createElement('div');
@@ -520,7 +880,21 @@ function createWindow() {
           <div class="help-section">
             <div class="help-section-title">🔐 Suas Credenciais</div>
             <div class="help-text">
-              Seus dados de login são salvos automaticamente. Próxima vez que entrar, os campos vão ficar preenchidos!
+              Seus dados de login são salvos automaticamente por perfil. Próxima vez que entrar, os campos vão ficar preenchidos!
+            </div>
+          </div>
+          
+          <div class="help-section">
+            <div class="help-section-title">👤 Múltiplas Contas</div>
+            <div class="help-text">
+              Crie perfis diferentes para manter várias contas logadas! Cada perfil tem suas credenciais.
+            </div>
+          </div>
+          
+          <div class="help-section">
+            <div class="help-section-title">🌙 Tema Escuro</div>
+            <div class="help-text">
+              Clique no botão de tema para alternar entre modo claro e escuro!
             </div>
           </div>
           
@@ -565,6 +939,21 @@ function createWindow() {
       };
       document.body.appendChild(confirmModal);
 
+      // CRIA MODAL DE ATUALIZAÇÃO
+      const updateModal = document.createElement('div');
+      updateModal.className = 'launcher-update-modal';
+      updateModal.innerHTML = \`
+        <div class="update-content">
+          <div class="update-header">🚀 Atualização Disponível!</div>
+          <div class="update-text">Uma nova versão do Launcher está disponível!</div>
+          <div class="update-buttons">
+            <button class="update-btn update-btn-now" onclick="window.ir_para_download()">Baixar Agora 📥</button>
+            <button class="update-btn update-btn-later" onclick="window.fechar_update()">Depois 🕐</button>
+          </div>
+        </div>
+      \`;
+      document.body.appendChild(updateModal);
+
       // CRIA MARCA D'ÁGUA
       const watermark = document.createElement('div');
       watermark.className = 'custom-launcher-watermark';
@@ -584,54 +973,90 @@ function createWindow() {
       // CRIA BARRA DE INFORMAÇÕES (rodapé)
       const infoBar = document.createElement('div');
       infoBar.className = 'launcher-info-bar';
-      infoBar.innerHTML = '<span class="info-text">🌾 Colheita Feliz - Feliz em Jogar! 🌾</span>';
+      infoBar.innerHTML = '<span class="info-text">🌾 Colheita Feliz - Feliz em Jogar! (Perfil: ' + perfilAtual + ') 🌾</span>';
       document.body.appendChild(infoBar);
 
       // VARIÁVEIS PARA CONTROLE DE CREDENCIAIS
       let credencialsPendentes = null;
       let permitirSubmit = false;
 
-      // ========== SISTEMA DE CREDENCIAIS ==========
+      // ========== SISTEMA DE CREDENCIAIS COM PERFIS ==========
+      
+      function inicializarPerfis() {
+        const perfis = JSON.parse(localStorage.getItem('launcher-perfis') || '[]');
+        if (perfis.length === 0) {
+          perfis.push({
+            nome: 'Principal',
+            emoji: '🚜',
+            email: '',
+            credenciais: null
+          });
+          localStorage.setItem('launcher-perfis', JSON.stringify(perfis));
+        }
+      }
+      
+      inicializarPerfis();
       
       function salvarCredenciais(usuario, senha) {
-        const dados = {
-          usuario: usuario,
-          senha: senha,
-          data: new Date().toISOString()
-        };
-        localStorage.setItem('launcher-credenciais-colheita', JSON.stringify(dados));
-        console.log('✅ Credenciais salvas!');
+        const perfis = JSON.parse(localStorage.getItem('launcher-perfis') || '[]');
+        const idx = perfis.findIndex(p => p.nome === perfilAtual);
+        
+        if (idx >= 0) {
+          perfis[idx].credenciais = {
+            usuario: usuario,
+            senha: senha,
+            data: new Date().toISOString()
+          };
+          localStorage.setItem('launcher-perfis', JSON.stringify(perfis));
+          console.log('✅ Credenciais salvas no perfil ' + perfilAtual + '!');
+        }
       }
       
       function carregarCredenciais() {
-        const dados = localStorage.getItem('launcher-credenciais-colheita');
-        if (dados) {
-          try {
-            return JSON.parse(dados);
-          } catch (e) {
-            console.error('Erro ao carregar credenciais:', e);
-            return null;
-          }
-        }
-        return null;
+        const perfis = JSON.parse(localStorage.getItem('launcher-perfis') || '[]');
+        const perfil = perfis.find(p => p.nome === perfilAtual);
+        return perfil?.credenciais || null;
       }
       
-      function autoPreencherLogin() {
+      function carregarCredenciaisDoPerfil() {
         const credenciais = carregarCredenciais();
         if (credenciais) {
           const inputs = document.querySelectorAll('input[type="text"], input[type="password"]');
           if (inputs.length >= 2) {
             inputs[0].value = credenciais.usuario;
             inputs[1].value = credenciais.senha;
-            console.log('✅ Campos preenchidos automaticamente!');
+            console.log('✅ Campos preenchidos do perfil ' + perfilAtual + '!');
           }
         }
       }
       
-      autoPreencherLogin();
+      function criarNovoPerfil() {
+        const nome = prompt('Nome do novo perfil:');
+        if (nome) {
+          const perfis = JSON.parse(localStorage.getItem('launcher-perfis') || '[]');
+          if (perfis.find(p => p.nome === nome)) {
+            alert('Esse perfil já existe!');
+            return;
+          }
+          
+          const emojis = ['🚜', '🌾', '🌻', '👨‍🌾', '👩‍🌾', '🐄', '🐖', '🐓'];
+          const emojiAleatorio = emojis[Math.floor(Math.random() * emojis.length)];
+          
+          perfis.push({
+            nome: nome,
+            emoji: emojiAleatorio,
+            email: '',
+            credenciais: null
+          });
+          
+          localStorage.setItem('launcher-perfis', JSON.stringify(perfis));
+          atualizarListaPerfis();
+        }
+      }
+      
+      carregarCredenciaisDoPerfil();
       
       document.addEventListener('submit', (e) => {
-        // Se foi liberado para submeter, deixa passar
         if (permitirSubmit) {
           permitirSubmit = false;
           return true;
@@ -653,7 +1078,7 @@ function createWindow() {
       }, true);
       
       const observer = new MutationObserver(() => {
-        autoPreencherLogin();
+        carregarCredenciaisDoPerfil();
       });
       
       observer.observe(document.body, {
@@ -661,7 +1086,7 @@ function createWindow() {
         subtree: true
       });
       
-      console.log('🔐 Sistema de credenciais ativado!');
+      console.log('🔐 Sistema de credenciais com perfis ativado!');
       
       // ========== FUNÇÕES DE CONTROLE ==========
       
@@ -679,7 +1104,6 @@ function createWindow() {
             salvarCredenciais(credencialsPendentes.usuario, credencialsPendentes.senha);
           }
           
-          // Permite o formulário continuar o submit após decisão
           if (credencialsPendentes.form) {
             permitirSubmit = true;
             setTimeout(() => {
@@ -695,8 +1119,22 @@ function createWindow() {
         helpOpen = false;
         helpModal.classList.remove('active');
       };
+      
+      window.ir_para_download = () => {
+        require('electron').ipcRenderer.send('abrir-github-releases');
+      };
+      
+      window.fechar_update = () => {
+        updateModal.classList.remove('active');
+      };
 
-      console.log('🌾 Interface Launcher NOVA injetada com sucesso!');
+      // LISTENER PARA ATUALIZAÇÃO
+      require('electron').ipcRenderer.on('nova-atualizacao-disponivel', (event, data) => {
+        updateModal.querySelector('.update-text').textContent = 'Versão ' + data.versao + ' disponível! Deseja baixar agora?';
+        updateModal.classList.add('active');
+      });
+
+      console.log('🌾 Interface Launcher V2 injetada com sucesso!');
     `);
   });
 
@@ -752,6 +1190,16 @@ ipcMain.on('launcher-reload', () => {
 
 ipcMain.on('launcher-home', () => {
   mainWindow.webContents.loadURL('http://fazendinha.drimvo.top/');
+});
+
+ipcMain.on('launcher-clear-cache', () => {
+  mainWindow.webContents.session.clearCache().then(() => {
+    mainWindow.webContents.reload();
+  });
+});
+
+ipcMain.on('abrir-github-releases', () => {
+  require('electron').shell.openExternal('https://github.com/Lascone/Colheita-Feliz-Launcher/releases');
 });
 
 ipcMain.on('launcher-clear-cache', () => {
