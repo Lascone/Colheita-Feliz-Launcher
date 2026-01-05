@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.env
+.env.local
+Colheita Feliz-win32-ia32/
+Colheita Feliz-win32-x64/
+Colheita Feliz-darwin-x64/
+Colheita Feliz-linux-x64/

@@ -1,0 +1,18 @@
+{
+  "name": "colheita-feliz-launcher",
+  "version": "1.0.0",
+  "description": "Launcher para o jogo Colheita Feliz com suporte a Flash",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron . --arch=ia32",
+    "pack": "electron-packager . ColheitaFeliz --platform=win32 --arch=ia32 --overwrite"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "electron": "^11.5.0",
+    "electron-packager": "^17.1.2"
+  }
+}
