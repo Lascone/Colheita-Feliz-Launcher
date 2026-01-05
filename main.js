@@ -31,6 +31,11 @@ app.commandLine.appendSwitch('safebrowsing-disable-auto-update');
 app.commandLine.appendSwitch('enable-automation');
 app.commandLine.appendSwitch('password-store', 'basic');
 
+// 4. CONFIGURA A DLL DO FLASH - ESSENCIAL!
+const pluginPath = path.join(__dirname, 'pepflashplayer32_34_0_0_330.dll');
+app.commandLine.appendSwitch('ppapi-flash-path', pluginPath);
+app.commandLine.appendSwitch('ppapi-flash-version', '34.0.0.330');
+
 let mainWindow;
 const VERSION = '1.0.0';
 // Usa HTTP em vez de HTTPS para evitar problemas com SSL
