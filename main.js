@@ -25,7 +25,7 @@ app.commandLine.appendSwitch('ignore-urlfetcher-cert-requests');
 
 let mainWindow;
 const VERSION = '1.0.0';
-const REPO_API = 'https://api.github.com/repos/Lascone/Colheita-Feliz-Launcher/releases/latest';
+const REPO_API = 'http://api.github.com/repos/Lascone/Colheita-Feliz-Launcher/releases/latest';
 
 // ========== VERIFICAR ATUALIZAÇÕES ==========
 function verificarAtualizacoes() {
@@ -37,16 +37,18 @@ function verificarAtualizacoes() {
     res.on('end', () => {
       try {
         const release = JSON.parse(data);
-        const novaVersao = release.tag_name.replace('v', '');
-        
-        if (novaVersao > VERSION) {
-          mainWindow.webContents.send('nova-atualizacao-disponivel', {
-            versao: novaVersao,
-            download: release.html_url
-          });
+        if (release && release.tag_name) {
+          const novaVersao = release.tag_name.replace('v', '');
+          
+          if (novaVersao > VERSION) {
+            mainWindow.webContents.send('nova-atualizacao-disponivel', {
+              versao: novaVersao,
+              download: release.html_url
+            });
+          }
         }
       } catch (e) {
-        console.log('Erro ao verificar atualizações:', e.message);
+        console.log('Erro ao processar resposta de atualizações:', e.message);
       }
     });
   }).on('error', (e) => {
@@ -1199,7 +1201,7 @@ ipcMain.on('launcher-clear-cache', () => {
 });
 
 ipcMain.on('abrir-github-releases', () => {
-  require('electron').shell.openExternal('https://github.com/Lascone/Colheita-Feliz-Launcher/releases');
+  require('electron').shell.openExternal('http://github.com/Lascone/Colheita-Feliz-Launcher/releases');
 });
 
 ipcMain.on('launcher-clear-cache', () => {
