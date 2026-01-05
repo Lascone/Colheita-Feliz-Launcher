@@ -93,8 +93,8 @@ function createWindow() {
   mainWindow.maximize();
   mainWindow.webContents.session.clearStorageData();
   
-  // Desabilita SSL no webContents
-  mainWindow.webContents.session.setSSLConfig({ minVersion: 'tlsv1' });
+  mainWindow.maximize();
+  mainWindow.webContents.session.clearStorageData();
 
   // Verifica atualizações após 2 segundos
   setTimeout(verificarAtualizacoes, 2000);
