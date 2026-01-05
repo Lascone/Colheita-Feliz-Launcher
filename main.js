@@ -30,6 +30,20 @@ app.commandLine.appendSwitch('metrics-recording-only');
 app.commandLine.appendSwitch('safebrowsing-disable-auto-update');
 app.commandLine.appendSwitch('enable-automation');
 app.commandLine.appendSwitch('password-store', 'basic');
+// Extras para desabilitar SSL/TLS/HTTPS completamente
+app.commandLine.appendSwitch('disable-blink-features', 'AutomationControlled');
+app.commandLine.appendSwitch('disable-extensions');
+app.commandLine.appendSwitch('disable-plugins');
+app.commandLine.appendSwitch('no-first-run');
+app.commandLine.appendSwitch('no-default-browser-check');
+app.commandLine.appendSwitch('disable-translate');
+app.commandLine.appendSwitch('disable-device-discovery-notifications');
+app.commandLine.appendSwitch('disable-default-apps');
+app.commandLine.appendSwitch('disable-preconnect');
+app.commandLine.appendSwitch('disable-hang-monitor');
+app.commandLine.appendSwitch('disable-prompt-on-repost');
+app.commandLine.appendSwitch('disable-extensions-http-throttling');
+app.commandLine.appendSwitch('disable-client-side-phishing-detection');
 
 // 4. CONFIGURA A DLL DO FLASH - ESSENCIAL!
 const pluginPath = path.join(__dirname, 'pepflashplayer32_34_0_0_330.dll');
@@ -108,6 +122,30 @@ function createWindow() {
   });
   
   mainWindow.loadURL('http://fazendinha.drimvo.top/', { userAgent });
+
+  // ========== INTERCEPTOR DE REQUISIÇÕES - CONVERTE HTTPS EM HTTP ==========
+  // Qualquer coisa que tente usar HTTPS é convertida para HTTP
+  mainWindow.webContents.session.webRequest.onBeforeRequest(
+    (details, callback) => {
+      if (details.url.startsWith('https://')) {
+        const novaUrl = details.url.replace('https://', 'http://');
+        console.log('🔄 Convertendo HTTPS → HTTP:', details.url, '->', novaUrl);
+        callback({ redirectURL: novaUrl });
+      } else {
+        callback({});
+      }
+    }
+  );
+
+  // Ignora erros de certificado para requisições
+  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Access-Control-Allow-Origin': ['*']
+      }
+    });
+  });
 
   // --- APÓS CARREGAR, INJETA A INTERFACE BONITA ---
   mainWindow.webContents.on('did-finish-load', () => {
