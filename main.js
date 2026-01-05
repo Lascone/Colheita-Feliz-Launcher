@@ -1,5 +1,6 @@
 const { app, BrowserWindow, globalShortcut, Menu, ipcMain, dialog } = require('electron');
 const path = require('path');
+const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const { execFile } = require('child_process');
@@ -7,30 +8,40 @@ const { execFile } = require('child_process');
 // 1. DESATIVA TOTALMENTE A GPU E ACELERAÇÃO
 app.disableHardwareAcceleration();
 
-// 2. PARÂMETROS DE LINHA DE COMANDO
+// 2. PARÂMETROS DE LINHA DE COMANDO EXTREMOS - TUDO DESABILITADO PARA SSL
 app.commandLine.appendSwitch('disable-web-security');
 app.commandLine.appendSwitch('allow-running-insecure-content');
 app.commandLine.appendSwitch('no-sandbox');
 app.commandLine.appendSwitch('disable-site-isolation-trials');
 app.commandLine.appendSwitch('disable-features', 'BlockInsecurePrivateNetworkRequests,IsolateOrigins,site-per-process');
 
-// 3. CONFIGURA A DLL DO FLASH
-const pluginPath = path.join(__dirname, 'pepflashplayer32_34_0_0_330.dll');
-app.commandLine.appendSwitch('ppapi-flash-path', pluginPath);
-app.commandLine.appendSwitch('ppapi-flash-version', '34.0.0.330');
-
-// 4. DESABILITA SSL/HTTPS
+// 3. DESABILITA SSL/HTTPS/CERTIFICADOS COMPLETAMENTE
 app.commandLine.appendSwitch('ignore-certificate-errors');
 app.commandLine.appendSwitch('ignore-urlfetcher-cert-requests');
+app.commandLine.appendSwitch('allow-insecure-localhost');
+app.commandLine.appendSwitch('disable-background-networking');
+app.commandLine.appendSwitch('disable-breakpad');
+app.commandLine.appendSwitch('disable-client-side-phishing-detection');
+app.commandLine.appendSwitch('disable-popup-blocking');
+app.commandLine.appendSwitch('disable-plugins-power-saver');
+app.commandLine.appendSwitch('disable-prompt-on-repost');
+app.commandLine.appendSwitch('disable-sync');
+app.commandLine.appendSwitch('metrics-recording-only');
+app.commandLine.appendSwitch('safebrowsing-disable-auto-update');
+app.commandLine.appendSwitch('enable-automation');
+app.commandLine.appendSwitch('password-store', 'basic');
 
 let mainWindow;
 const VERSION = '1.0.0';
+// Usa HTTP em vez de HTTPS para evitar problemas com SSL
 const REPO_API = 'http://api.github.com/repos/Lascone/Colheita-Feliz-Launcher/releases/latest';
 
 // ========== VERIFICAR ATUALIZAÇÕES ==========
 function verificarAtualizacoes() {
-  https.get(REPO_API, {
-    headers: { 'User-Agent': 'Colheita-Feliz-Launcher' }
+  // Tenta com HTTP (sem SSL)
+  http.get(REPO_API, {
+    headers: { 'User-Agent': 'Colheita-Feliz-Launcher' },
+    rejectUnauthorized: false
   }, (res) => {
     let data = '';
     res.on('data', chunk => data += chunk);
@@ -52,7 +63,7 @@ function verificarAtualizacoes() {
       }
     });
   }).on('error', (e) => {
-    console.log('Erro na conexão:', e.message);
+    console.log('Erro na conexão (HTTP):', e.message);
   });
 }
 
@@ -76,6 +87,9 @@ function createWindow() {
 
   mainWindow.maximize();
   mainWindow.webContents.session.clearStorageData();
+  
+  // Desabilita SSL no webContents
+  mainWindow.webContents.session.setSSLConfig({ minVersion: 'tlsv1' });
 
   // Verifica atualizações após 2 segundos
   setTimeout(verificarAtualizacoes, 2000);
